@@ -45,6 +45,9 @@
 #include <ecl.h>
 #include <mathlib/mathlib.h>
 
+namespace estimator
+{
+
 // Accumulate imu data and store to buffer at desired rate
 void EstimatorInterface::setIMUData(const imuSample &imu_sample)
 {
@@ -78,8 +81,8 @@ void EstimatorInterface::setIMUData(const imuSample &imu_sample)
 	// detect if the vehicle is not moving when on ground
 	if (!_control_status.flags.in_air) {
 		if ((_vibe_metrics[1] * 4.0E4f > _params.is_moving_scaler)
-				|| (_vibe_metrics[2] * 2.1E2f > _params.is_moving_scaler)
-				|| ((imu_sample.delta_ang.norm() / dt) > 0.05f * _params.is_moving_scaler)) {
+		    || (_vibe_metrics[2] * 2.1E2f > _params.is_moving_scaler)
+		    || ((imu_sample.delta_ang.norm() / dt) > 0.05f * _params.is_moving_scaler)) {
 
 			_time_last_move_detect_us = imu_sample.time_us;
 		}
@@ -143,21 +146,6 @@ void EstimatorInterface::setIMUData(const imuSample &imu_sample)
 	}
 }
 
-void EstimatorInterface::setIMUData(uint64_t time_usec, uint64_t delta_ang_dt, uint64_t delta_vel_dt,
-				    float (&delta_ang)[3], float (&delta_vel)[3])
-{
-	imuSample imu_sample_new;
-	imu_sample_new.delta_ang = Vector3f(delta_ang);
-	imu_sample_new.delta_vel = Vector3f(delta_vel);
-
-	// convert time from us to secs
-	imu_sample_new.delta_ang_dt = delta_ang_dt / 1e6f;
-	imu_sample_new.delta_vel_dt = delta_vel_dt / 1e6f;
-	imu_sample_new.time_us = time_usec;
-
-	setIMUData(imu_sample_new);
-}
-
 void EstimatorInterface::setMagData(uint64_t time_usec, float (&data)[3])
 {
 	if (!_initialised || _mag_buffer_fail) {
@@ -184,7 +172,7 @@ void EstimatorInterface::setMagData(uint64_t time_usec, float (&data)[3])
 		mag_sample_new.time_us -= FILTER_UPDATE_PERIOD_MS * 1000 / 2;
 		_time_last_mag = time_usec;
 
-		mag_sample_new.mag = Vector3f(data);
+		mag_sample_new.mag = Vector3f{data[0], data[1], data[2]};
 
 		_mag_buffer.push(mag_sample_new);
 	}
@@ -218,18 +206,20 @@ void EstimatorInterface::setGpsData(uint64_t time_usec, const gps_message &gps)
 		_time_last_gps = time_usec;
 
 		gps_sample_new.time_us = math::max(gps_sample_new.time_us, _imu_sample_delayed.time_us);
-		gps_sample_new.vel = Vector3f(gps.vel_ned);
+		gps_sample_new.vel = Vector3f{gps.vel_ned[0], gps.vel_ned[1], gps.vel_ned[2]};
 
 		_gps_speed_valid = gps.vel_ned_valid;
 		gps_sample_new.sacc = gps.sacc;
 		gps_sample_new.hacc = gps.eph;
 		gps_sample_new.vacc = gps.epv;
 
-		gps_sample_new.hgt = (float)gps.alt * 1e-3f;
+		gps_sample_new.hgt = gps.alt * 1e-3;
 
 		gps_sample_new.yaw = gps.yaw;
+
 		if (ISFINITE(gps.yaw_offset)) {
 			_gps_yaw_offset = gps.yaw_offset;
+
 		} else {
 			_gps_yaw_offset = 0.0f;
 		}
@@ -379,6 +369,7 @@ void EstimatorInterface::setOpticalFlowData(uint64_t time_usec, flow_message *fl
 		// use this to prevent use of a saturated flow sensor when there are other aiding sources available
 		float flow_rate_magnitude;
 		bool flow_magnitude_good = true;
+
 		if (delta_time_good) {
 			flow_rate_magnitude = flow->flowdata.norm() / delta_time;
 			flow_magnitude_good = (flow_rate_magnitude <= _flow_max_rate);
@@ -392,6 +383,7 @@ void EstimatorInterface::setOpticalFlowData(uint64_t time_usec, flow_message *fl
 		// Check data validity and write to buffers
 		// Invalid flow data is allowed when on ground and is handled as a special case in controlOpticalFlowFusion()
 		bool use_flow_data_to_navigate = delta_time_good && flow_quality_good && (flow_magnitude_good || relying_on_flow);
+
 		if (use_flow_data_to_navigate || (!_control_status.flags.in_air && relying_on_flow)) {
 			flowSample optflow_sample_new;
 			// calculate the system time-stamp for the trailing edge of the flow data integration period
@@ -480,8 +472,8 @@ void EstimatorInterface::setAuxVelData(uint64_t time_usec, float (&data)[2], flo
 		auxvel_sample_new.time_us -= FILTER_UPDATE_PERIOD_MS * 1000 / 2;
 		_time_last_auxvel = time_usec;
 
-		auxvel_sample_new.velNE = Vector2f(data);
-		auxvel_sample_new.velVarNE = Vector2f(variance);
+		auxvel_sample_new.velNE = Vector2f{data[0], data[1]};
+		auxvel_sample_new.velVarNE = Vector2f{variance[0], variance[1]};
 
 		_auxvel_buffer.push(auxvel_sample_new);
 	}
@@ -582,3 +574,6 @@ void EstimatorInterface::print_status()
 	ECL_INFO("output vert buffer: %d (%d Bytes)", _output_vert_buffer.get_length(), _output_vert_buffer.get_total_size());
 	ECL_INFO("drag buffer: %d (%d Bytes)", _drag_buffer.get_length(), _drag_buffer.get_total_size());
 }
+
+} // namespace estimator
+

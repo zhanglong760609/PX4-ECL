@@ -44,6 +44,9 @@
 
 #include "estimator_interface.h"
 
+namespace estimator
+{
+
 class Ekf : public EstimatorInterface
 {
 public:
@@ -123,19 +126,19 @@ public:
 	void get_true_airspeed(float *tas);
 
 	// get the full covariance matrix
-	matrix::SquareMatrix<float, 24> covariances() const { return matrix::SquareMatrix<float, _k_num_states>(P); }
+	matrix::SquareMatrix<ecl_float_t, 24> covariances() const { return matrix::SquareMatrix<ecl_float_t, _k_num_states>(P); }
 
 	// get the diagonal elements of the covariance matrix
-	matrix::Vector<float, 24> covariances_diagonal() const { return covariances().diag(); }
+	matrix::Vector<ecl_float_t, 24> covariances_diagonal() const { return covariances().diag(); }
 
 	// get the orientation (quaterion) covariances
-	matrix::SquareMatrix<float, 4> orientation_covariances() const { return covariances().slice<4, 4>(0, 0); }
+	matrix::SquareMatrix<ecl_float_t, 4> orientation_covariances() const { return covariances().slice<4, 4>(0, 0); }
 
 	// get the linear velocity covariances
-	matrix::SquareMatrix<float, 3> velocity_covariances() const { return covariances().slice<3, 3>(4, 4); }
+	matrix::SquareMatrix<ecl_float_t, 3> velocity_covariances() const { return covariances().slice<3, 3>(4, 4); }
 
 	// get the position covariances
-	matrix::SquareMatrix<float, 3> position_covariances() const { return covariances().slice<3, 3>(7, 7); }
+	matrix::SquareMatrix<ecl_float_t, 3> position_covariances() const { return covariances().slice<3, 3>(7, 7); }
 
 	// ask estimator for sensor data collection decision and do any preprocessing if required, returns true if not defined
 	bool collect_gps(const gps_message &gps);
@@ -241,7 +244,11 @@ public:
 	// return the amount the quaternion has changed in the last reset and the number of reset events
 	void get_quat_reset(float delta_quat[4], uint8_t *counter)
 	{
-		memcpy(delta_quat, &_state_reset_status.quat_change._data[0], sizeof(_state_reset_status.quat_change._data));
+		delta_quat[0] = _state_reset_status.quat_change(0);
+		delta_quat[1] = _state_reset_status.quat_change(1);
+		delta_quat[2] = _state_reset_status.quat_change(2);
+		delta_quat[3] = _state_reset_status.quat_change(3);
+
 		*counter = _state_reset_status.quat_counter;
 	}
 
@@ -259,7 +266,7 @@ public:
 	void get_ev2ekf_quaternion(float *quat);
 
 	// use the latest IMU data at the current time horizon.
-	Quatf calculate_quaternion() const;
+	matrix::Quaternion<float> calculate_quaternion() const;
 
 	// set minimum continuous period without GPS fail required to mark a healthy GPS status
 	void set_min_required_gps_health_time(uint32_t time_us) { _min_gps_health_time_us = time_us; }
@@ -281,8 +288,8 @@ private:
 		Quatf quat_change;	///< quaternion delta due to last reset - multiply pre-reset quaternion by this to get post-reset quaternion
 	} _state_reset_status{};	///< reset event monitoring structure containing velocity, position, height and yaw reset information
 
-	float _dt_ekf_avg{FILTER_UPDATE_PERIOD_S}; ///< average update rate of the ekf
-	float _dt_update{0.01f}; ///< delta time since last ekf update. This time can be used for filters which run at the same rate as the Ekf::update() function. (sec)
+	ecl_float_t _dt_ekf_avg{FILTER_UPDATE_PERIOD_S}; ///< average update rate of the ekf
+	ecl_float_t _dt_update{0.01f}; ///< delta time since last ekf update. This time can be used for filters which run at the same rate as the Ekf::update() function. (sec)
 
 	stateSample _state{};		///< state struct of the ekf running at the delayed time horizon
 
@@ -361,7 +368,7 @@ private:
 	bool _mag_yaw_reset_req{false};		///< true when a reset of the yaw using the magnetometer data has been requested
 	bool _mag_decl_cov_reset{false};	///< true after the fuseDeclination() function has been used to modify the earth field covariances after a magnetic field reset event.
 
-	float P[_k_num_states][_k_num_states] {};	///< state covariance matrix
+	ecl_float_t P[_k_num_states][_k_num_states] {};	///< state covariance matrix
 
 	Vector3f _delta_vel_bias_var_accum;		///< kahan summation algorithm accumulator for delta velocity bias variance
 	Vector3f _delta_angle_bias_var_accum;	///< kahan summation algorithm accumulator for delta angle bias variance
@@ -558,7 +565,7 @@ private:
 
 	// reset the heading and magnetic field states using the declination and magnetometer/external vision measurements
 	// return true if successful
-	bool resetMagHeading(Vector3f &mag_init, bool increase_yaw_var = true, bool update_buffer=true);
+	bool resetMagHeading(Vector3f &mag_init, bool increase_yaw_var = true, bool update_buffer = true);
 
 	// Do a forced re-alignment of the yaw angle to align with the horizontal velocity vector from the GPS.
 	// It is used to align the yaw angle after launch or takeoff for fixed wing vehicle.
@@ -589,7 +596,7 @@ private:
 	void fixCovarianceErrors();
 
 	// make ekf covariance matrix symmetric between a nominated state indexe range
-	void makeSymmetrical(float (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
+	void makeSymmetrical(ecl_float_t (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
 
 	// constrain the ekf states
 	void constrainStates();
@@ -653,7 +660,8 @@ private:
 	void checkRangeDataValidity();
 
 	// return the square of two floating point numbers - used in auto coded sections
-	static constexpr float sq(float var) { return var * var; }
+	template<typename T>
+	static constexpr T sq(T var) { return var * var; }
 
 	// set control flags to use baro height
 	void setControlBaroHeight();
@@ -668,17 +676,17 @@ private:
 	void setControlEVHeight();
 
 	// zero the specified range of rows in the state covariance matrix
-	void zeroRows(float (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
+	void zeroRows(ecl_float_t (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
 
 	// zero the specified range of columns in the state covariance matrix
-	void zeroCols(float (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
+	void zeroCols(ecl_float_t (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
 
 	// zero the specified range of off diagonals in the state covariance matrix
-	void zeroOffDiag(float (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
+	void zeroOffDiag(ecl_float_t (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last);
 
 	// zero the specified range of off diagonals in the state covariance matrix
 	// set the diagonals to the supplied value
-	void setDiag(float (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last, float variance);
+	void setDiag(ecl_float_t (&cov_mat)[_k_num_states][_k_num_states], uint8_t first, uint8_t last, ecl_float_t variance);
 
 	// calculate the measurement variance for the optical flow sensor
 	float calcOptFlowMeasVar();
@@ -715,6 +723,8 @@ private:
 	// This function relies on the caller to be responsible for keeping a copy of
 	// "accumulator" and passing this value at the next iteration.
 	// Ref: https://en.wikipedia.org/wiki/Kahan_summation_algorithm
-	float kahanSummation(float sum_previous, float input, float &accumulator) const;
+	ecl_float_t kahanSummation(ecl_float_t sum_previous, ecl_float_t input, ecl_float_t &accumulator) const;
 
 };
+
+} // namespace estimator

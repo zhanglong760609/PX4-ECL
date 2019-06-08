@@ -42,6 +42,8 @@
 #include <cstdio>
 #include <random>
 
+using namespace estimator;
+
 int main(int argc, char *argv[])
 {
 	(void)argc; // unused
@@ -50,14 +52,22 @@ int main(int argc, char *argv[])
 	Ekf *base = new Ekf();
 
 	// Test1: feed in fake imu data and check if delta angles are summed correctly
-	float delta_vel[3] = { 0.002f, 0.002f, 0.002f};
-	float delta_ang[3] = { -0.1f, 0.2f, 0.3f};
+	ecl_float_t delta_vel[3] = { 0.002, 0.002, 0.002};
+	ecl_float_t delta_ang[3] = { -0.1, 0.2, 0.3};
 	uint32_t time_usec = 1000;
 
 	// simulate 400 Hz imu rate, filter should downsample to 100Hz
 	// feed in 2 seconds of data
 	for (int i = 0; i < 800; i++) {
-		base->setIMUData(time_usec, 2500, 2500, delta_ang, delta_vel);
+		imuSample imu_sample_new;
+		imu_sample_new.time_us = time_usec;
+		imu_sample_new.delta_ang_dt = 2500 * 1e-6;
+		imu_sample_new.delta_ang = matrix::Vector3<ecl_float_t> {delta_ang};
+		imu_sample_new.delta_vel_dt = 2500 * 1e-6;
+		imu_sample_new.delta_vel = matrix::Vector3<ecl_float_t> {delta_vel};
+
+		base->setIMUData(imu_sample_new);
+
 		time_usec += 2500;
 	}
 
@@ -68,14 +78,28 @@ int main(int argc, char *argv[])
 	// simulate 400 Hz imu rate, filter should downsample to 100Hz
 	// feed in 2 seconds of data
 	for (int i = 0; i < 800; i++) {
-		base->setIMUData(time_usec, 2500, 2500, delta_ang, delta_vel);
+		imuSample imu_sample_new;
+		imu_sample_new.time_us = time_usec;
+		imu_sample_new.delta_ang_dt = 2500 * 1e-6;
+		imu_sample_new.delta_ang = matrix::Vector3<ecl_float_t> {delta_ang};
+		imu_sample_new.delta_vel_dt = 2500 * 1e-6;
+		imu_sample_new.delta_vel = matrix::Vector3<ecl_float_t> {delta_vel};
+
+		base->setIMUData(imu_sample_new);
+
 		//base->print_imu_avg_time();
 		time_usec += 2500;
 	}
 
 	// Test3: feed in slow imu data, filter should now take every sample
 	for (int i = 0; i < 800; i++) {
-		base->setIMUData(time_usec, 2500, 2500, delta_ang, delta_vel);
+		imuSample imu_sample_new;
+		imu_sample_new.time_us = time_usec;
+		imu_sample_new.delta_ang_dt = 2500 * 1e-6;
+		imu_sample_new.delta_ang = matrix::Vector3<ecl_float_t> {delta_ang};
+		imu_sample_new.delta_vel_dt = 2500 * 1e-6;
+		imu_sample_new.delta_vel = matrix::Vector3<ecl_float_t> {delta_vel};
+
 		time_usec += 30000;
 	}
 
@@ -131,7 +155,15 @@ int main(int argc, char *argv[])
 		}
 
 		gps.time_usec = timer;
-		base->setIMUData(timer, timer - timer_last, timer - timer_last, delta_ang, delta_vel);
+
+		imuSample imu_sample_new;
+		imu_sample_new.time_us = timer;
+		imu_sample_new.delta_ang_dt = (timer - timer_last) * 1e-6;
+		imu_sample_new.delta_ang = matrix::Vector3<ecl_float_t> {delta_ang};
+		imu_sample_new.delta_vel_dt = (timer - timer_last) * 1e-6;
+		imu_sample_new.delta_vel = matrix::Vector3<ecl_float_t> {delta_vel};
+		base->setIMUData(imu_sample_new);
+
 		base->setMagData(timer, mag);
 		base->setBaroData(timer, baro);
 		base->setGpsData(timer, gps);

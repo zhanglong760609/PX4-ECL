@@ -31,6 +31,8 @@
  *
  ****************************************************************************/
 
+#pragma once
+
 /**
  * @file common.h
  * Definition of base class for attitude estimators
@@ -45,13 +47,14 @@
 namespace estimator
 {
 
-using matrix::AxisAnglef;
-using matrix::Dcmf;
-using matrix::Eulerf;
-using matrix::Matrix3f;
-using matrix::Quatf;
-using matrix::Vector2f;
-using matrix::Vector3f;
+using AxisAnglef = matrix::AxisAngle<ecl_float_t>;
+using Dcmf = matrix::Dcm<ecl_float_t>;
+using Eulerf = matrix::Euler<ecl_float_t>;
+using Matrix3f = matrix::Matrix<ecl_float_t, 3, 3>;
+using Quatf = matrix::Quaternion<ecl_float_t>;
+using Vector2f = matrix::Vector2<ecl_float_t>;
+using Vector3f = matrix::Vector3<ecl_float_t>;
+
 using matrix::wrap_pi;
 
 struct gps_message {
@@ -102,11 +105,11 @@ struct outputVert {
 };
 
 struct imuSample {
-	Vector3f    delta_ang;		///< delta angle in body frame (integrated gyro measurements) (rad)
-	Vector3f    delta_vel;		///< delta velocity in body frame (integrated accelerometer measurements) (m/sec)
-	float       delta_ang_dt;	///< delta angle integration period (sec)
-	float       delta_vel_dt;	///< delta velocity integration period (sec)
-	uint64_t    time_us;		///< timestamp of the measurement (uSec)
+	Vector3f	delta_ang;	///< delta angle in body frame (integrated gyro measurements) (rad)
+	Vector3f	delta_vel;	///< delta velocity in body frame (integrated accelerometer measurements) (m/sec)
+	ecl_float_t	delta_ang_dt;	///< delta angle integration period (sec)
+	ecl_float_t	delta_vel_dt;	///< delta velocity integration period (sec)
+	uint64_t	time_us;	///< timestamp of the measurement (uSec)
 };
 
 struct gpsSample {
@@ -138,16 +141,16 @@ struct rangeSample {
 
 struct airspeedSample {
 	float       true_airspeed;	///< true airspeed measurement (m/sec)
-	float 		eas2tas;	///< equivalent to true airspeed factor
+	float       eas2tas;		///< equivalent to true airspeed factor
 	uint64_t    time_us;		///< timestamp of the measurement (uSec)
 };
 
 struct flowSample {
-	uint8_t  quality;	///< quality indicator between 0 and 255
-	Vector2f flowRadXY;	///< measured delta angle of the image about the X and Y body axes (rad), RH rotation is positive
-	Vector3f gyroXYZ;	///< measured delta angle of the inertial frame about the body axes obtained from rate gyro measurements (rad), RH rotation is positive
-	float    dt;		///< amount of integration time (sec)
-	uint64_t time_us;	///< timestamp of the integration period leading edge (uSec)
+	Vector2f	flowRadXY;	///< measured delta angle of the image about the X and Y body axes (rad), RH rotation is positive
+	Vector3f	gyroXYZ;	///< measured delta angle of the inertial frame about the body axes obtained from rate gyro measurements (rad), RH rotation is positive
+	ecl_float_t	dt;		///< amount of integration time (sec)
+	uint64_t	time_us;	///< timestamp of the integration period leading edge (uSec)
+	uint8_t		quality;	///< quality indicator between 0 and 255
 };
 
 struct extVisionSample {

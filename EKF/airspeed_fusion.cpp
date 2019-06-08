@@ -40,9 +40,14 @@
  * @author Paul Riseborough <p_riseborough@live.com.au>
  *
  */
-#include "../ecl.h"
+
+#include <ecl.h>
+
 #include "ekf.h"
 #include <mathlib/mathlib.h>
+
+namespace estimator
+{
 
 void Ekf::fuseAirspeed()
 {
@@ -53,8 +58,7 @@ void Ekf::fuseAirspeed()
 	float vwn; // Wind speed in north direction
 	float vwe; // Wind speed in east direction
 	float v_tas_pred; // Predicted measurement
-	float R_TAS = sq(math::constrain(_params.eas_noise, 0.5f, 5.0f) * math::constrain(_airspeed_sample_delayed.eas2tas, 0.9f,
-			 10.0f)); // Variance for true airspeed measurement - (m/sec)^2
+	float R_TAS = sq(math::constrain(_params.eas_noise, 0.5f, 5.0f) * math::constrain(_airspeed_sample_delayed.eas2tas, 0.9f, 10.0f)); // Variance for true airspeed measurement - (m/sec)^2
 	float SH_TAS[3] = {}; // Variable used to optimise calculations of measurement jacobian
 	float H_TAS[24] = {}; // Observation Jacobian
 	float SK_TAS[2] = {}; // Variable used to optimise calculations of the Kalman gain vector
@@ -274,3 +278,5 @@ void Ekf::resetWindStates()
 		_state.wind_vel(1) = 0.0f;
 	}
 }
+
+} // namespace estimator
