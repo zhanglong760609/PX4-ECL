@@ -62,15 +62,14 @@ void EstimatorInterface::setIMUData(const imuSample &imu_sample)
 		_dt_imu_avg = 0.8f * _dt_imu_avg + 0.2f * dt;
 	}
 
-	_newest_high_rate_imu_sample = imu_sample;
-
 	// Do not change order of computeVibrationMetric and checkIfVehicleAtRest
 	computeVibrationMetric(imu_sample);
 	_control_status.flags.vehicle_at_rest = checkIfVehicleAtRest(dt, imu_sample);
 
+	_imu_updated = _imu_down_sampler.update(imu_sample);
+
 	// accumulate and down-sample imu data and push to the buffer when new downsampled data becomes available
-	if (_imu_down_sampler.update(imu_sample)) {
-		_imu_updated = true;
+	if (_imu_updated) {
 
 		_imu_buffer.push(_imu_down_sampler.getDownSampledImuAndTriggerReset());
 
@@ -83,6 +82,8 @@ void EstimatorInterface::setIMUData(const imuSample &imu_sample)
 
 		setDragData(imu_sample);
 	}
+
+	calculateOutputStates(imu_sample);
 }
 
 void EstimatorInterface::computeVibrationMetric(const imuSample &imu)
@@ -477,10 +478,10 @@ void EstimatorInterface::setDragData(const imuSample &imu)
 
 		_drag_sample_count ++;
 		// note acceleration is accumulated as a delta velocity
-		_drag_down_sampled.accelXY(0) += _newest_high_rate_imu_sample.delta_vel(0);
-		_drag_down_sampled.accelXY(1) += _newest_high_rate_imu_sample.delta_vel(1);
-		_drag_down_sampled.time_us += _newest_high_rate_imu_sample.time_us;
-		_drag_sample_time_dt += _newest_high_rate_imu_sample.delta_vel_dt;
+		_drag_down_sampled.accelXY(0) += imu.delta_vel(0);
+		_drag_down_sampled.accelXY(1) += imu.delta_vel(1);
+		_drag_down_sampled.time_us += imu.time_us;
+		_drag_sample_time_dt += imu.delta_vel_dt;
 
 		// calculate the downsample ratio for drag specific force data
 		uint8_t min_sample_ratio = (uint8_t) ceilf((float)_imu_buffer_length / _obs_buffer_length);

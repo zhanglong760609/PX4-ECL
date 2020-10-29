@@ -172,6 +172,7 @@ public:
 
 	void setIMUData(const imuSample &imu_sample);
 
+	virtual void calculateOutputStates(const imuSample &imu) = 0;
 
 	void setMagData(const magSample &mag_sample);
 
@@ -285,7 +286,7 @@ public:
 	// return true if the local position estimate is valid
 	bool local_position_is_valid();
 
-	const matrix::Quatf getQuaternion() const { return _output_new.quat_nominal; }
+	const matrix::Quatf& getQuaternion() const { return _output_new.quat_nominal; }
 
 	// return the quaternion defining the rotation from the EKF to the External Vision reference frame
 	virtual matrix::Quatf getVisionAlignmentQuaternion() const = 0;
@@ -466,7 +467,6 @@ protected:
 	// Output Predictor
 	outputSample _output_new{};		// filter output on the non-delayed time horizon
 	outputVert _output_vert_new{};		// vertical filter output on the non-delayed time horizon
-	imuSample _newest_high_rate_imu_sample{};		// imu sample capturing the newest imu data
 	Matrix3f _R_to_earth_now;		// rotation matrix from body to earth frame at current time
 	Vector3f _vel_imu_rel_body_ned;		// velocity of IMU relative to body origin in NED earth frame
 	Vector3f _vel_deriv;		// velocity derivative at the IMU in NED earth frame (m/s/s)
