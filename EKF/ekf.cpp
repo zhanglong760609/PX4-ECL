@@ -160,42 +160,63 @@ bool Ekf::initialiseFilter()
 	// Sum the magnetometer measurements
 	if (_mag_buffer.pop_first_older_than(_imu_sample_delayed.time_us, &_mag_sample_delayed)) {
 		if (_mag_sample_delayed.time_us != 0) {
-			_mag_counter ++;
-
-			// wait for all bad initial data to be flushed
-			if (_mag_counter <= uint8_t(_obs_buffer_length + 1)) {
+			if (_mag_counter == 0) {
 				_mag_lpf.reset(_mag_sample_delayed.mag);
 
 			} else {
 				_mag_lpf.update(_mag_sample_delayed.mag);
 			}
+
+			_mag_counter++;
 		}
 	}
 
 	// accumulate enough height measurements to be confident in the quality of the data
 	if (_baro_buffer.pop_first_older_than(_imu_sample_delayed.time_us, &_baro_sample_delayed)) {
 		if (_baro_sample_delayed.time_us != 0) {
-			_baro_counter ++;
+			if (_baro_counter == 0) {
+				_baro_hgt_offset  = _baro_sample_delayed.hgt;
 
-			// wait for all bad initial data to be flushed
-			if (_baro_counter <= uint8_t(_obs_buffer_length + 1)) {
-				_baro_hgt_offset = _baro_sample_delayed.hgt;
-
-			} else if (_baro_counter > (uint8_t)(_obs_buffer_length + 1)) {
+			} else {
 				_baro_hgt_offset = 0.9f * _baro_hgt_offset + 0.1f * _baro_sample_delayed.hgt;
 			}
+
+			_baro_counter++;
 		}
 	}
 
-	const bool not_enough_baro_samples_accumulated = _baro_counter <= 2u * _obs_buffer_length;
-	const bool not_enough_mag_samples_accumulated = _mag_counter <= 2u * _obs_buffer_length;
-
-	if (not_enough_baro_samples_accumulated || not_enough_mag_samples_accumulated) {
-		return false;
+	if (_params.mag_fusion_type <= MAG_FUSE_TYPE_3D) {
+		if (_mag_counter < _obs_buffer_length) {
+			// not enough mag samples accumulated
+			return false;
+		}
 	}
 
-	// we use baro height initially and switch to GPS/range/EV finder later when it passes checks.
-	setControlBaroHeight();
+	switch (_params.vdist_sensor_type) {
+	default:
+
+	// FALLTHROUGH
+	case VDIST_SENSOR_BARO:
+		if (_baro_counter < _obs_buffer_length) {
+			// not enough baro samples accumulated
+			return false;
+		}
+
+		setControlBaroHeight();
+		break;
+
+	case VDIST_SENSOR_GPS:
+		setControlGPSHeight();
+		break;
+
+	case VDIST_SENSOR_RANGE:
+		setControlRangeHeight();
+		break;
+
+	case VDIST_SENSOR_EV:
+		setControlEVHeight();
+		break;
+	}
 
 	if (!initialiseTilt()) {
 		return false;
@@ -235,8 +256,8 @@ bool Ekf::initialiseTilt()
 	const float accel_norm = _accel_lpf.getState().norm();
 	const float gyro_norm = _gyro_lpf.getState().norm();
 
-	if (accel_norm < 0.9f * CONSTANTS_ONE_G ||
-	    accel_norm > 1.1f * CONSTANTS_ONE_G ||
+	if (accel_norm < 0.8f * CONSTANTS_ONE_G ||
+	    accel_norm > 1.2f * CONSTANTS_ONE_G ||
 	    gyro_norm > math::radians(15.0f)) {
 		return false;
 	}
@@ -246,8 +267,7 @@ bool Ekf::initialiseTilt()
 	const float pitch = asinf(gravity_in_body(0));
 	const float roll = atan2f(-gravity_in_body(1), -gravity_in_body(2));
 
-	const Eulerf euler_init(roll, pitch, 0.0f);
-	_state.quat_nominal = Quatf(euler_init);
+	_state.quat_nominal = Quatf{Eulerf{roll, pitch, 0.0f}};
 	_R_to_earth = Dcmf(_state.quat_nominal);
 
 	return true;
@@ -507,7 +527,7 @@ void Ekf::applyCorrectionToVerticalOutputBuffer(float vert_vel_correction)
 * The vel and pos state history are corrected individually so they track the EKF states at
 * the fusion time horizon. This option provides the most accurate tracking of EKF states.
 */
-void Ekf::applyCorrectionToOutputBuffer(const Vector3f& vel_correction, const Vector3f& pos_correction)
+void Ekf::applyCorrectionToOutputBuffer(const Vector3f &vel_correction, const Vector3f &pos_correction)
 {
 	// loop through the output filter state history and apply the corrections to the velocity and position states
 	for (uint8_t index = 0; index < _output_buffer.get_length(); index++) {
